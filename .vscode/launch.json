@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": ["./test-folder"],
             "cwd": "${workspaceFolder}"
         },
         {
@@ -38,7 +38,8 @@
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": ["E:\\code\\path\\to\\your\\directory"],
+
             "cwd": "${workspaceFolder}"
         }
     ]

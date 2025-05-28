@@ -1,19 +1,37 @@
+use argh::FromArgs;
 use std::fs::{self, File};
 use std::io::Write;
+use std::rc::Rc;
 
 mod rules;
 
+#[derive(FromArgs)]
+/// cmd arguments
+struct Aruguments {
+    /// 扫描路径
+    #[argh(positional)]
+    directory: String,
+    /// 需要手动确认的原子式前缀
+    #[argh(option, short = 'p', default = "String::from(\"__需要手动处理>\")")]
+    warn_prefix: String,
+    /// 需要手动确认的原子式后缀
+    #[argh(option, short = 's', default = "String::from(\"__需要手动处理>\")")]
+    warn_suffix: String,
+}
+
 // TODO 好像有些println被吞了
 fn main() {
+    let _args: Aruguments = argh::from_env();
+    let args = Rc::new(_args);
     let start = std::time::Instant::now();
-    run();
+    run(args);
     let duration = start.elapsed();
     println!("运行耗时:{:?}", duration);
 }
 static EXTENSION_VEC: [&str; 5] = ["vue", "tsx", "jsx", "js", "ts"];
 
-fn run() {
-    let directory = r#"your path"#;
+fn run(args: Rc<Aruguments>) {
+    let directory = &args.directory;
     let directory_vec = process_directory(directory).expect("读取目录错误");
     println!("{:?}", directory_vec);
     let transform_reg_vec = rules::get_transform_reg_vec();
