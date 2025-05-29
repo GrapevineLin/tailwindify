@@ -7,7 +7,7 @@ use std::thread::{self, JoinHandle};
 mod rules;
 
 #[derive(FromArgs)]
-/// cmd arguments
+/// 启动参数
 struct Aruguments {
     /// 扫描路径
     #[argh(positional)]
@@ -16,8 +16,8 @@ struct Aruguments {
     #[argh(option, short = 'p', default = "String::from(\"__需要手动处理>\")")]
     warn_prefix: String,
     /// 需要手动确认的原子式后缀
-    #[argh(option, short = 's', default = "String::from(\"__需要手动处理>\")")]
-    warn_suffix: String,
+    #[argh(option, short = 's', default = "String::from(\"<需要手动处理__\")")]
+    warn_suffix: String
 }
 
 // TODO 好像有些println被吞了
