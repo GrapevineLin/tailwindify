@@ -2,6 +2,7 @@ use argh::FromArgs;
 use std::fs::{self, File};
 use std::io::Write;
 use std::rc::Rc;
+use std::thread::{self, JoinHandle};
 
 mod rules;
 
@@ -29,51 +30,40 @@ fn main() {
     println!("运行耗时:{:?}", duration);
 }
 static EXTENSION_VEC: [&str; 5] = ["vue", "tsx", "jsx", "js", "ts"];
-
+// TODO 多少才算合理的？
+static GROUP_COUNT: usize = 80;
 fn run(args: Rc<Aruguments>) {
     let directory = &args.directory;
     let directory_vec = process_directory(directory).expect("读取目录错误");
     println!("{:?}", directory_vec);
-    let transform_reg_vec = rules::get_transform_reg_vec();
+    // let transform_reg_vec = rules::get_transform_reg_vec();
+    // TODO 统计处理文件次数
     let mut count = 0;
+    // 分组，每个组{GROUP_COUNT}个
+    let mut file_vec: Vec<Vec<String>> = Vec::new();
     for file_str in directory_vec {
-        match read_file_content(&file_str) {
-            Ok(content) => {
-                let mut content = content;
-                let mut has_replated = false;
-                for reg_item in &transform_reg_vec {
-                    let replaced = reg_item.reg.replace_all(&content, reg_item.transform_fn);
-                    if replaced != content {
-                        has_replated = true;
-                        content = replaced.to_string();
-                    }
-                }
-                if has_replated {
-                    let mut file = match File::create(&file_str) {
-                        Ok(file) => file,
-                        Err(error) => {
-                            println!("创建文件失败:{}", error);
-                            continue;
-                        }
-                    };
-                    match file.write_all(content.as_bytes()) {
-                        Ok(_) => {
-                            count += 1;
-                            println!("写入文件{}成功", file_str)
-                        }
-                        Err(error) => {
-                            println!("回写文件失败:{}", error)
-                        }
-                    };
-                } else {
-                    println!("文件没有匹配:{}", file_str)
-                }
-            }
-            Err(error) => {
-                println!("读取文件失败:{}", error)
-            }
-        }
+        if file_vec.is_empty() || file_vec.last().expect("数组为空").len() >= GROUP_COUNT {
+            file_vec.push(Vec::new());
+        };
+        let group_vec = file_vec.last_mut().expect("数组为空");
+        group_vec.push(String::clone(&file_str));
     }
+    let mut handle_vec: Vec<JoinHandle<()>> = Vec::new();
+    for group_vec in file_vec {
+        let handle = thread::spawn(|| {
+            for file_str in group_vec {
+                if let Some(_) = replace_file_content(&file_str) {
+                    // count = count + 1;
+                }
+            }
+        });
+        handle_vec.push(handle);
+    }
+
+    for handle in handle_vec {
+        handle.join().expect("线程错误");
+    }
+
     println!("一共处理了{}个文件", count)
 }
 
@@ -121,6 +111,47 @@ fn process_directory(directory: &str) -> Result<Vec<String>, std::io::Error> {
 }
 
 // 读取文件内容
-fn read_file_content(path: &str) -> Result<String, std::io::Error> {
-    fs::read_to_string(path)
+fn replace_file_content(file_str: &str) -> Option<()> {
+    match fs::read_to_string(&file_str) {
+        Ok(content) => {
+            let mut content = content;
+            let mut has_replated = false;
+            // TODO 共享一个配置 而不是各自创建
+            let transform_reg_vec = rules::get_transform_reg_vec();
+
+            for reg_item in &transform_reg_vec {
+                let replaced = reg_item.reg.replace_all(&content, &reg_item.transform_fn);
+                if replaced != content {
+                    has_replated = true;
+                    content = replaced.to_string();
+                }
+            }
+            if has_replated {
+                let mut file = match File::create(&file_str) {
+                    Ok(file) => file,
+                    Err(error) => {
+                        println!("创建文件失败:{}", error);
+                        return None;
+                    }
+                };
+                match file.write_all(content.as_bytes()) {
+                    Ok(_) => {
+                        println!("写入文件{}成功", file_str);
+                        return Some(());
+                    }
+                    Err(error) => {
+                        println!("回写文件失败:{}", error);
+                        return None;
+                    }
+                };
+            } else {
+                println!("文件没有匹配:{}", file_str);
+                return None;
+            }
+        }
+        Err(error) => {
+            println!("读取文件失败:{}", error);
+            return None;
+        }
+    }
 }
