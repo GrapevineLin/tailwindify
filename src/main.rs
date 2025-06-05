@@ -22,7 +22,8 @@ struct Aruguments {
 
 // TODO 好像有些println被吞了
 fn main() {
-    let args: Aruguments = argh::from_env();
+    let _args: Aruguments = argh::from_env();
+    let args = Rc::new(_args);
     let start = std::time::Instant::now();
     run(args);
     let duration = start.elapsed();
@@ -31,10 +32,10 @@ fn main() {
 static EXTENSION_VEC: [&str; 5] = ["vue", "tsx", "jsx", "js", "ts"];
 // TODO 多少才算合理的？
 static GROUP_COUNT: usize = 80;
-fn run(args: Aruguments) {
+fn run(args: Rc<Aruguments>) {
     let directory = &args.directory;
     let directory_vec = process_directory(directory).expect("读取目录错误");
-    println!("{:?}", directory_vec);
+    let total_count = directory_vec.len();
     // let transform_reg_vec = rules::get_transform_reg_vec();
     // TODO 统计处理文件次数
     let mut count = 0;
@@ -47,25 +48,27 @@ fn run(args: Aruguments) {
         let group_vec = file_vec.last_mut().expect("数组为空");
         group_vec.push(String::clone(&file_str));
     }
-    let mut handle_vec: Vec<JoinHandle<()>> = Vec::new();
+    let mut handle_vec: Vec<JoinHandle<i32>> = Vec::new();
     for group_vec in file_vec {
         // TODO 考虑共享内存 不要反复 clone
         let args1 = args.clone();
         let handle = thread::spawn(move || {
+            let mut count = 0;
             for file_str in group_vec {
                 if let Some(_) = replace_file_content(&args1, &file_str) {
-                    // count = count + 1;
+                    count = count + 1;
                 }
             }
+            count
         });
         handle_vec.push(handle);
     }
 
     for handle in handle_vec {
-        handle.join().expect("线程错误");
+        let thread_count = handle.join().expect("线程错误");
+        count = count + thread_count;
     }
-
-    println!("一共处理了{}个文件", count)
+    println!("一共扫描到{}个文件，处理了{}个文件", total_count, count)
 }
 
 /// 读取目录下的所有文件
@@ -112,13 +115,13 @@ fn process_directory(directory: &str) -> Result<Vec<String>, std::io::Error> {
 }
 
 // 读取文件内容
-fn replace_file_content(args: &Aruguments, file_str: &str) -> Option<()> {
+fn replace_file_content(file_str: &str) -> Option<()> {
     match fs::read_to_string(&file_str) {
         Ok(content) => {
             let mut content = content;
             let mut has_replated = false;
             // TODO 共享一个配置 而不是各自创建
-            let transform_reg_vec = rules::get_transform_reg_vec(args);
+            let transform_reg_vec = rules::get_transform_reg_vec();
 
             for reg_item in &transform_reg_vec {
                 let replaced = reg_item.reg.replace_all(&content, &reg_item.transform_fn);
