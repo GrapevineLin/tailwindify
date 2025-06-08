@@ -7,3 +7,4 @@ edition = "2024"
 argh = "0.1.13"
 num_cpus = "1.17.0"
 regex = "1.11.1"
+winapi = { version = "0.3", features = ["wincon"] }

@@ -21,6 +21,11 @@ struct Arguments {
 
 // TODO 好像有些println被吞了
 fn main() {
+    #[cfg(windows)]
+    unsafe {
+        use winapi::um::wincon::SetConsoleOutputCP;
+        SetConsoleOutputCP(65001); // 65001 是 UTF-8 的代码页
+    }
     let args: Arguments = argh::from_env();
     let start = std::time::Instant::now();
     run(args);
