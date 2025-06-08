@@ -1,14 +1,13 @@
 use argh::FromArgs;
 use std::fs::{self, File};
 use std::io::Write;
-use std::rc::Rc;
 use std::thread::{self, JoinHandle};
 
 mod rules;
 
 #[derive(FromArgs, Clone)]
 /// 启动参数
-struct Aruguments {
+struct Arguments {
     /// 扫描路径
     #[argh(positional)]
     directory: String,
@@ -22,27 +21,26 @@ struct Aruguments {
 
 // TODO 好像有些println被吞了
 fn main() {
-    let _args: Aruguments = argh::from_env();
-    let args = Rc::new(_args);
+    let args: Arguments = argh::from_env();
     let start = std::time::Instant::now();
     run(args);
     let duration = start.elapsed();
     println!("运行耗时:{:?}", duration);
 }
+
 static EXTENSION_VEC: [&str; 5] = ["vue", "tsx", "jsx", "js", "ts"];
-// TODO 多少才算合理的？
-static GROUP_COUNT: usize = 80;
-fn run(args: Rc<Aruguments>) {
+
+fn run(args: Arguments) {
     let directory = &args.directory;
     let directory_vec = process_directory(directory).expect("读取目录错误");
     let total_count = directory_vec.len();
-    // let transform_reg_vec = rules::get_transform_reg_vec();
-    // TODO 统计处理文件次数
+    // 统计处理文件次数
     let mut count = 0;
-    // 分组，每个组{GROUP_COUNT}个
+    let group_count = calculate_group_count(total_count);
+    // 给线程分组，每个组{group_count}个
     let mut file_vec: Vec<Vec<String>> = Vec::new();
     for file_str in directory_vec {
-        if file_vec.is_empty() || file_vec.last().expect("数组为空").len() >= GROUP_COUNT {
+        if file_vec.is_empty() || file_vec.last().expect("数组为空").len() >= group_count {
             file_vec.push(Vec::new());
         };
         let group_vec = file_vec.last_mut().expect("数组为空");
@@ -115,22 +113,24 @@ fn process_directory(directory: &str) -> Result<Vec<String>, std::io::Error> {
 }
 
 // 读取文件内容
-fn replace_file_content(file_str: &str) -> Option<()> {
+fn replace_file_content(arg: &Arguments, file_str: &str) -> Option<()> {
     match fs::read_to_string(&file_str) {
         Ok(content) => {
             let mut content = content;
-            let mut has_replated = false;
+            let mut has_replaced = false;
             // TODO 共享一个配置 而不是各自创建
-            let transform_reg_vec = rules::get_transform_reg_vec();
+            let transformation_rules = rules::get_transform_reg_vec(&arg);
 
-            for reg_item in &transform_reg_vec {
+            for reg_item in &transformation_rules {
                 let replaced = reg_item.reg.replace_all(&content, &reg_item.transform_fn);
                 if replaced != content {
-                    has_replated = true;
+                    has_replaced = true;
                     content = replaced.to_string();
                 }
             }
-            if has_replated {
+            if has_replaced {
+                // FIXME: 文件写入失败时，原始文件内容可能会丢失（因为直接调用了 File::create）
+                // 建议先写入临时文件，确认成功后再替换原文件
                 let mut file = match File::create(&file_str) {
                     Ok(file) => file,
                     Err(error) => {
@@ -158,4 +158,16 @@ fn replace_file_content(file_str: &str) -> Option<()> {
             return None;
         }
     }
+}
+
+fn calculate_group_count(total_files: usize) -> usize {
+    let cpus = num_cpus::get();
+    let group_count = std::cmp::max(1, total_files / cpus);
+    dbg!(
+        "总文件:{},cpu核心:{},每个cpu处理文件数:{}",
+        total_files,
+        cpus,
+        group_count
+    );
+    group_count
 }

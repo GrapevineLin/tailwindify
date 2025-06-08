@@ -1,12 +1,12 @@
+use super::Arguments;
 use regex::{Captures, Regex};
-use super::Aruguments;
 
 pub struct TransformReg {
     pub reg: Regex,
     pub transform_fn: Box<dyn Fn(&Captures) -> String>,
 }
 
-pub fn get_transform_reg_vec(arg: &Aruguments) -> Vec<TransformReg> {
+pub fn get_transform_reg_vec(arg: &Arguments) -> Vec<TransformReg> {
     vec![
         TransformReg {
             reg: Regex::new(r"(m|p)(t|r|b|l)(\d+)(r?)").expect("正则错误"),
