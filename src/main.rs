@@ -114,17 +114,18 @@ fn run(args: Arguments) -> Result<()> {
         "{}",
         format!("🔧 启动 {} 个工作线程", file_groups.len()).cyan()
     );
+    let transformation_rules_arc = Arc::new(rules::get_transform_reg_vec(&args)?);
 
     for (group_id, group_vec) in file_groups.into_iter().enumerate() {
-        let args_clone = args.clone();
         let counter = Arc::clone(&processed_count);
+        let rules_clone = Arc::clone(&transformation_rules_arc);
 
         let handle = thread::spawn(move || -> Result<usize> {
             debug!("线程 {} 开始处理 {} 个文件", group_id, group_vec.len());
             let mut local_count = 0;
 
             for file_str in group_vec {
-                match replace_file_content(&args_clone, &file_str) {
+                match replace_file_content(&file_str, rules_clone.clone()) {
                     Ok(()) => {
                         local_count += 1;
                         let current = counter.fetch_add(1, Ordering::SeqCst) + 1;
@@ -249,7 +250,7 @@ fn create_file_groups(files: Vec<String>, group_size: usize) -> Vec<Vec<String>>
 }
 
 /// 安全地替换文件内容
-fn replace_file_content(args: &Arguments, file_path: &str) -> Result<()> {
+fn replace_file_content(file_path: &str, transformation_rules: Arc<Vec<rules::TransformReg>>) -> Result<()> {
     debug!("开始处理文件: {}", file_path);
 
     let content = fs::read_to_string(file_path)
@@ -258,10 +259,7 @@ fn replace_file_content(args: &Arguments, file_path: &str) -> Result<()> {
     let mut current_content = content;
     let mut has_changes = false;
 
-    // FIXME: 获取转换规则，应该只初始化一次，而不是每次都创建
-    let transformation_rules = rules::get_transform_reg_vec(args)?;
-
-    for rule in &transformation_rules {
+    for rule in transformation_rules.as_ref().iter() {
         let replaced = rule.reg.replace_all(&current_content, &rule.transform_fn);
         // 只有当实际发生替换时才更新内容
         if let std::borrow::Cow::Owned(replaced_content) = replaced {
