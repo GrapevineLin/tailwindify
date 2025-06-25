@@ -5,4 +5,28 @@ edition = "2024"
 
 [dependencies]
 argh = "0.1.13"
+num_cpus = "1.17.0"
 regex = "1.11.1"
+winapi = { version = "0.3", features = ["wincon"] }
+# 错误处理
+anyhow = "1.0"
+thiserror = "2.0.12"
+# 日志处理
+env_logger = "0.11"
+log = "0.4"
+# 更好的颜色输出
+colored = "3.0.0"
+
+[profile.release]
+# 优化级别，3为最高
+opt-level = 3
+# 启用LTO以进行更激进的优化
+lto = true
+# 启用代码精简
+codegen-units = 1
+# 启用调试信息
+debug = false
+# 启用panic时的堆栈展开
+panic = "abort"
+# 启用符号剥离
+strip = true
